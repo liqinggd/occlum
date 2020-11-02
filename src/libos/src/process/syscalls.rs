@@ -85,6 +85,130 @@ fn clone_file_actions_safely(fdop_ptr: *const FdOp) -> Result<Vec<FileAction>> {
     Ok(file_actions)
 }
 
+pub fn do_spawn2(
+    child_pid_ptr: *mut u32,
+    path: *const i8,
+    argv: *const *const i8,
+    envp: *const *const i8,
+    fa: *const SpawnFileActions,
+) -> Result<isize> {
+    check_mut_ptr(child_pid_ptr)?;
+    let path = clone_cstring_safely(path)?.to_string_lossy().into_owned();
+    let argv = clone_cstrings_safely(argv)?;
+    let envp = clone_cstrings_safely(envp)?;
+    let file_actions = clone_file_actions_from_fa_safely(fa)?;
+    let current = current!();
+    debug!(
+        "spawn: path: {:?}, argv: {:?}, envp: {:?}, actions: {:?}",
+        path, argv, envp, file_actions
+    );
+
+    let child_pid = super::do_spawn::do_spawn(&path, &argv, &envp, &file_actions, &current)?;
+
+    unsafe { *child_pid_ptr = child_pid };
+    Ok(0)
+}
+
+#[repr(C)]
+pub struct SpawnFileActions {
+    allocated: u32,
+    used: u32,
+    actions: *const SpawnAction,
+    pad: [u32; 16],
+}
+
+#[repr(C)]
+struct SpawnAction {
+    tag: u32,
+    action: Action,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(u32)]
+#[derive(Debug)]
+enum ActionTag {
+    FDOP_CLOSE = 0,
+    FDOP_DUP2 = 1,
+    FDOP_OPEN = 2,
+}
+
+impl ActionTag {
+    fn from_u32(tag: u32) -> Result<Self> {
+        if tag > ActionTag::FDOP_OPEN as u32 {
+            return_errno!(EINVAL, "Unknown file action command");
+        }
+        Ok(unsafe { core::mem::transmute(tag as u32) })
+    }
+}
+
+#[repr(C)]
+union Action {
+    close_action: CloseAction,
+    dup2_action: Dup2Action,
+    open_action: OpenAction,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CloseAction {
+    fd: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Dup2Action {
+    fd: u32,
+    newfd: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct OpenAction {
+    fd: u32,
+    path: *const i8,
+    oflag: u32,
+    mode: u32,
+}
+
+fn clone_file_actions_from_fa_safely(fa_ptr: *const SpawnFileActions) -> Result<Vec<FileAction>> {
+    let mut file_actions = Vec::new();
+    if fa_ptr == std::ptr::null() {
+        return Ok(file_actions);
+    }
+
+    let sa_slice = {
+        check_ptr(fa_ptr)?;
+        let fa = unsafe { &*fa_ptr };
+        let sa_ptr = fa.actions;
+        let sa_len = fa.used as usize;
+        check_array(sa_ptr, sa_len)?;
+        unsafe { std::slice::from_raw_parts(sa_ptr, sa_len) }
+    };
+
+    for sa in sa_slice {
+        let file_action = unsafe {
+            let tag = ActionTag::from_u32(sa.tag)?;
+            match tag {
+                ActionTag::FDOP_CLOSE => FileAction::Close(sa.action.close_action.fd),
+                ActionTag::FDOP_DUP2 => {
+                    FileAction::Dup2(sa.action.dup2_action.fd, sa.action.dup2_action.newfd)
+                }
+                ActionTag::FDOP_OPEN => FileAction::Open {
+                    path: clone_cstring_safely(sa.action.open_action.path)?
+                        .to_string_lossy()
+                        .into_owned(),
+                    mode: sa.action.open_action.mode,
+                    oflag: sa.action.open_action.oflag,
+                    fd: sa.action.open_action.fd,
+                },
+            }
+        };
+        file_actions.push(file_action);
+    }
+
+    Ok(file_actions)
+}
+
 pub fn do_clone(
     flags: u32,
     stack_addr: usize,
