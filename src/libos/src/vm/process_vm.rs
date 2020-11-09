@@ -172,6 +172,10 @@ impl<'a, 'b> ProcessVMBuilder<'a, 'b> {
     fn init_elf_memory(elf_range: &VMRange, elf_file: &ElfFile) -> Result<()> {
         // Destination buffer: ELF appeared in the process
         let elf_proc_buf = unsafe { elf_range.as_slice_mut() };
+        // Cleanup the destination buffer
+        for b in &mut elf_proc_buf[..] {
+            *b = 0;
+        }
         // Source buffer: ELF stored in the ELF file
         let elf_file_buf = elf_file.as_slice();
         // Init all loadable segements
@@ -184,14 +188,10 @@ impl<'a, 'b> ProcessVMBuilder<'a, 'b> {
                 let mem_addr = segment.virtual_addr() as usize;
                 let mem_size = segment.mem_size() as usize;
                 debug_assert!(file_size <= mem_size);
-
                 // The first file_size bytes are loaded from the ELF file
+                // The remaining (mem_size - file_size) bytes are zeros
                 elf_proc_buf[mem_addr..mem_addr + file_size]
                     .copy_from_slice(&elf_file_buf[file_offset..file_offset + file_size]);
-                // The remaining (mem_size - file_size) bytes are zeros
-                for b in &mut elf_proc_buf[mem_addr + file_size..mem_addr + mem_size] {
-                    *b = 0;
-                }
             });
         Ok(())
     }
