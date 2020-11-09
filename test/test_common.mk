@@ -15,12 +15,14 @@ C_OBJS := $(addprefix $(BUILD_DIR)/test/obj/$(TEST_NAME)/,$(C_SRCS:%.c=%.o))
 CXX_SRCS := $(wildcard *.cc)
 CXX_OBJS := $(addprefix $(BUILD_DIR)/test/obj/$(TEST_NAME)/,$(CXX_SRCS:%.cc=%.o))
 
+OCCLUM_LINKER := /usr/local/occlum-glibc/lib/ld-linux-x86-64.so.2
+
 ALL_BUILD_SUBDIRS := $(sort $(patsubst %/,%,$(dir $(BIN) $(C_OBJS) $(CXX_OBJS))))
 
-CC := occlum-gcc
-CXX := occlum-g++
+CC := gcc
+CXX := g++
 
-C_FLAGS = -Wall -Wno-return-local-addr -I../include -O2 -fPIC $(EXTRA_C_FLAGS)
+C_FLAGS = -Wall -Wno-return-local-addr -I../include -O2 -fPIC -Wl,--dynamic-linker=$(OCCLUM_LINKER) $(EXTRA_C_FLAGS)
 ifeq ($(SGX_MODE), SIM)
 	C_FLAGS += -D SGX_MODE_SIM
 else ifeq ($(SGX_MODE), SW)

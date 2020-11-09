@@ -16,7 +16,7 @@ FAIL_LOG = $(BUILD_DIR)/test/.fail
 TEST_DEPS := client data_sink
 # Tests: need to be compiled and run by test-% target
 TESTS ?= env empty hello_world malloc mmap file fs_perms getpid spawn sched pipe time \
-	truncate readdir mkdir open stat link symlink chmod chown tls pthread uname rlimit \
+	truncate mkdir open stat link symlink chmod chown tls pthread uname rlimit \
 	server server_epoll unix_socket cout hostfs cpuid rdtsc device sleep exit_group \
 	ioctl fcntl eventfd emulate_syscall access signal sysinfo prctl rename
 # Benchmarks: need to be compiled and run by bench-% target

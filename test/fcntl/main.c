@@ -1,3 +1,4 @@
+#define _LARGEFILE64_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include "test_fs.h"
@@ -7,7 +8,7 @@
 // ============================================================================
 
 #define CREATION_FLAGS_MASK (O_CLOEXEC | O_CREAT| O_DIRECTORY | O_EXCL |    \
-                             O_NOCTTY | O_NOFOLLOW | O_TMPFILE | O_TRUNC)
+                             O_NOCTTY | O_NOFOLLOW | __O_TMPFILE | O_TRUNC)
 
 // ============================================================================
 // Test cases for fcntl

@@ -117,7 +117,7 @@ fn new_process(
         file_path.to_string()
     };
 
-    let ldso_path = "/lib/ld-musl-x86_64.so.1";
+    let ldso_path = "/lib/ld-linux-x86-64.so.2";
     let ldso_elf_buf = load_file_to_vec(ldso_path, current_ref)
         .cause_err(|e| errno!(e.errno(), "cannot load ld.so"))?;
 

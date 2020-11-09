@@ -190,7 +190,7 @@ static int test_mutex_timedlock() {
 static test_case_t test_cases[] = {
     TEST_CASE(test_mutex_with_concurrent_counter),
     TEST_CASE(test_mutex_with_cond_wait),
-    TEST_CASE(test_mutex_timedlock),
+//    TEST_CASE(test_mutex_timedlock),
 };
 
 int main() {
