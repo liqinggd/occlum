@@ -166,7 +166,7 @@ static int test_mkdir_then_rmdir() {
 static test_case_t test_cases[] = {
     TEST_CASE(test_write_read),
     TEST_CASE(test_rename),
-    //TEST_CASE(test_readdir),
+    TEST_CASE(test_readdir),
     TEST_CASE(test_mkdir_then_rmdir),
 };
 

@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -41,7 +42,11 @@ static int test_getdents_with_big_enough_buffer() {
         THROW_ERROR("failed to open directory");
     }
     while (1) {
+#ifdef __GLIBC__
+        len = syscall(__NR_getdents, fd, buf, sizeof(buf));
+#else
         len = getdents(fd, (struct dirent *)buf, sizeof(buf));
+#endif
         if (len < 0) {
             close(fd);
             THROW_ERROR("failed to call getdents");
@@ -62,7 +67,11 @@ static int test_getdents_with_too_small_buffer() {
     if (fd < 0) {
         THROW_ERROR("failed to open directory");
     }
+#ifdef __GLIBC__
+    len = syscall(__NR_getdents, fd, buf, sizeof(buf));
+#else
     len = getdents(fd, (struct dirent *)buf, sizeof(buf));
+#endif
     if (len >= 0 || errno != EINVAL) {
         close(fd);
         THROW_ERROR("failed to call getdents with small buffer");
