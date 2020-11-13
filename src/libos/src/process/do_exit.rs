@@ -1,7 +1,7 @@
 use crate::signal::constants::*;
 use std::intrinsics::atomic_store;
 
-use super::do_futex::futex_wake;
+use super::do_futex::{futex_wake, FUTEX_BITSET_MATCH_ANY};
 use super::process::{Process, ProcessFilter};
 use super::{table, TermStatus, ThreadRef, ThreadStatus};
 use crate::prelude::*;
@@ -41,7 +41,7 @@ fn exit_thread(term_status: TermStatus) {
         unsafe {
             atomic_store(ctid_ptr.as_ptr(), 0);
         }
-        futex_wake(ctid_ptr.as_ptr() as *const i32, 1);
+        futex_wake(ctid_ptr.as_ptr() as *const i32, 1, FUTEX_BITSET_MATCH_ANY);
     }
 
     // Keep the main thread's tid available as long as the process is not destroyed.

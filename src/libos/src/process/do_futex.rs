@@ -22,6 +22,7 @@ pub enum FutexOp {
     FUTEX_UNLOCK_PI = 7,
     FUTEX_TRYLOCK_PI = 8,
     FUTEX_WAIT_BITSET = 9,
+    FUTEX_WAKE_BITSET = 10,
 }
 const FUTEX_OP_MASK: u32 = 0x0000_000F;
 
@@ -38,6 +39,7 @@ impl FutexOp {
             7 => Ok(FutexOp::FUTEX_UNLOCK_PI),
             8 => Ok(FutexOp::FUTEX_TRYLOCK_PI),
             9 => Ok(FutexOp::FUTEX_WAIT_BITSET),
+            10 => Ok(FutexOp::FUTEX_WAKE_BITSET),
             _ => return_errno!(EINVAL, "Unknown futex op"),
         }
     }
@@ -69,15 +71,18 @@ pub fn futex_op_and_flags_from_u32(bits: u32) -> Result<(FutexOp, FutexFlags)> {
     Ok((op, flags))
 }
 
+pub const FUTEX_BITSET_MATCH_ANY: u32 = 0xFFFF_FFFF;
+
 /// Do futex wait
 pub fn futex_wait(
     futex_addr: *const i32,
     futex_val: i32,
     timeout: &Option<timespec_t>,
+    bitset: u32,
 ) -> Result<()> {
     debug!(
-        "futex_wait addr: {:#x}, val: {}, timeout: {:?}",
-        futex_addr as usize, futex_val, timeout
+        "futex_wait addr: {:#x}, val: {}, timeout: {:?}, bitset: {:#x}",
+        futex_addr as usize, futex_val, timeout, bitset
     );
     // Get and lock the futex bucket
     let futex_key = FutexKey::new(futex_addr);
@@ -120,7 +125,7 @@ pub fn futex_wait(
     // it cannot find the transition of futex value from val to new_val and enqueue
     // to the bucket, which will cause the waiter to wait forever.
 
-    let futex_item = FutexItem::new(futex_key);
+    let futex_item = FutexItem::new(futex_key, bitset);
     futex_bucket.enqueue_item(futex_item.clone());
 
     // Must make sure that no locks are holded by this thread before wait
@@ -129,10 +134,10 @@ pub fn futex_wait(
 }
 
 /// Do futex wake
-pub fn futex_wake(futex_addr: *const i32, max_count: usize) -> Result<usize> {
+pub fn futex_wake(futex_addr: *const i32, max_count: usize, bitset: u32) -> Result<usize> {
     debug!(
-        "futex_wake addr: {:#x}, max_count: {}",
-        futex_addr as usize, max_count
+        "futex_wake addr: {:#x}, max_count: {}, bitset: {:#x}",
+        futex_addr as usize, max_count, bitset
     );
 
     // Get and lock the futex bucket
@@ -141,7 +146,7 @@ pub fn futex_wake(futex_addr: *const i32, max_count: usize) -> Result<usize> {
     let mut futex_bucket = futex_bucket_ref.lock().unwrap();
 
     // Dequeue and wake up the items in the bucket
-    let count = futex_bucket.dequeue_and_wake_items(futex_key, max_count);
+    let count = futex_bucket.dequeue_and_wake_items(futex_key, max_count, bitset);
     Ok(count)
 }
 
@@ -153,7 +158,7 @@ pub fn futex_requeue(
     futex_new_addr: *const i32,
 ) -> Result<usize> {
     if futex_new_addr == futex_addr {
-        return futex_wake(futex_addr, max_nwakes);
+        return futex_wake(futex_addr, max_nwakes, FUTEX_BITSET_MATCH_ANY);
     }
     let futex_key = FutexKey::new(futex_addr);
     let futex_new_key = FutexKey::new(futex_new_addr);
@@ -173,7 +178,8 @@ pub fn futex_requeue(
                     (futex_bucket, futex_new_bucket)
                 }
             };
-            let nwakes = futex_bucket.dequeue_and_wake_items(futex_key, max_nwakes);
+            let nwakes =
+                futex_bucket.dequeue_and_wake_items(futex_key, max_nwakes, FUTEX_BITSET_MATCH_ANY);
             futex_bucket.requeue_items_to_another_bucket(
                 futex_key,
                 &mut futex_new_bucket,
@@ -184,7 +190,8 @@ pub fn futex_requeue(
         } else {
             // bucket_idx == new_bucket_idx
             let mut futex_bucket = futex_bucket_ref.lock().unwrap();
-            let nwakes = futex_bucket.dequeue_and_wake_items(futex_key, max_nwakes);
+            let nwakes =
+                futex_bucket.dequeue_and_wake_items(futex_key, max_nwakes, FUTEX_BITSET_MATCH_ANY);
             futex_bucket.update_item_keys(futex_key, futex_new_key, max_nrequeues);
             nwakes
         }
@@ -219,13 +226,15 @@ impl FutexKey {
 #[derive(Clone, PartialEq)]
 struct FutexItem {
     key: FutexKey,
+    bitset: u32,
     waiter: WaiterRef,
 }
 
 impl FutexItem {
-    pub fn new(key: FutexKey) -> FutexItem {
+    pub fn new(key: FutexKey, bitset: u32) -> FutexItem {
         FutexItem {
-            key: key,
+            key,
+            bitset,
             waiter: Arc::new(Waiter::new()),
         }
     }
@@ -281,12 +290,17 @@ impl FutexBucket {
     }
 
     // TODO: consider using std::future to improve the readability
-    pub fn dequeue_and_wake_items(&mut self, key: FutexKey, max_count: usize) -> usize {
+    pub fn dequeue_and_wake_items(
+        &mut self,
+        key: FutexKey,
+        max_count: usize,
+        bitset: u32,
+    ) -> usize {
         let mut count = 0;
         let mut items_to_wake = Vec::new();
 
         self.queue.retain(|item| {
-            if count >= max_count || key != item.key {
+            if count >= max_count || key != item.key || (bitset & item.bitset) == 0 {
                 true
             } else {
                 items_to_wake.push(item.clone());

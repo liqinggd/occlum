@@ -51,7 +51,7 @@
 
 use super::*;
 
-use crate::process::{futex_wait, futex_wake};
+use crate::process::{futex_wait, futex_wake, FUTEX_BITSET_MATCH_ANY};
 use std::sync::atomic::{spin_loop_hint, AtomicI32, Ordering};
 
 // The implementaion of RwLock
@@ -122,7 +122,12 @@ impl RwLockInner {
 
             let tmp = (val as u32 | 0x8000_0000) as i32;
             self.rw_lock.compare_and_swap(val, tmp, Ordering::SeqCst);
-            ret = futex_wait(&self.rw_lock as *const _ as *const i32, tmp, &None);
+            ret = futex_wait(
+                &self.rw_lock as *const _ as *const i32,
+                tmp,
+                &None,
+                FUTEX_BITSET_MATCH_ANY,
+            );
 
             self.rw_waiters.fetch_sub(1, Ordering::SeqCst);
 
@@ -187,7 +192,12 @@ impl RwLockInner {
 
             let tmp = (val as u32 | 0x8000_0000) as i32;
             self.rw_lock.compare_and_swap(val, tmp, Ordering::SeqCst);
-            ret = futex_wait(&self.rw_lock as *const _ as *const i32, tmp, &None);
+            ret = futex_wait(
+                &self.rw_lock as *const _ as *const i32,
+                tmp,
+                &None,
+                FUTEX_BITSET_MATCH_ANY,
+            );
 
             self.rw_waiters.fetch_sub(1, Ordering::SeqCst);
 
@@ -238,7 +248,11 @@ impl RwLockInner {
             // The reasons to use cnt other than waiters here:
             // For read_unlock, only one waiter which must be a writer needs to be waken;
             // For write_unlock, at most 0x7FFF_FFFF waiters can be waken.
-            futex_wake(&self.rw_lock as *const _ as *const i32, cnt as usize);
+            futex_wake(
+                &self.rw_lock as *const _ as *const i32,
+                cnt as usize,
+                FUTEX_BITSET_MATCH_ANY,
+            );
         }
         Ok(())
     }
