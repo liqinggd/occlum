@@ -44,7 +44,7 @@ fn open_root_fs_according_to(mount_configs: &Vec<ConfigMount>) -> Result<Arc<Mou
         let mount_config = layer_mount_configs
             .iter()
             .find(|m| m.type_ == ConfigMountFsType::TYPE_SEFS && m.options.integrity_only)
-            .ok_or_else(|| errno!(Errno::ENOENT, "the image SEFS in layers is not valid"))?;
+            .ok_or_else(|| errno!(Errno::ENOENT, "the image layer is not valid"))?;
         (
             mount_config.options.mac,
             mount_config.source.as_ref().unwrap(),
@@ -59,30 +59,35 @@ fn open_root_fs_according_to(mount_configs: &Vec<ConfigMount>) -> Result<Arc<Mou
         &time::OcclumTimeProvider,
         &SgxUuidProvider,
     )?;
-    // container SEFS in layers
-    let root_container_sefs_source = {
-        let mount_config = layer_mount_configs
-            .iter()
-            .find(|m| m.type_ == ConfigMountFsType::TYPE_SEFS && !m.options.integrity_only)
-            .ok_or_else(|| errno!(Errno::ENOENT, "the container SEFS in layers is not valid"))?;
-        mount_config.source.as_ref().unwrap()
-    };
-    let root_container_sefs = {
-        SEFS::open(
-            Box::new(SgxStorage::new(root_container_sefs_source, false, None)),
-            &time::OcclumTimeProvider,
-            &SgxUuidProvider,
-        )
-    }
-    .or_else(|_| {
-        SEFS::create(
-            Box::new(SgxStorage::new(root_container_sefs_source, false, None)),
-            &time::OcclumTimeProvider,
-            &SgxUuidProvider,
-        )
-    })?;
+    // container FS layer
+    let root_container_mount_config = layer_mount_configs
+        .iter()
+        .find(|m| !m.options.integrity_only)
+        .ok_or_else(|| errno!(Errno::ENOENT, "the container layer is not valid"))?;
 
-    let root_unionfs = UnionFS::new(vec![root_container_sefs, root_image_sefs])?;
+    let root_container_fs: Arc<dyn FileSystem> = match &root_container_mount_config.type_ {
+        ConfigMountFsType::TYPE_SEFS => {
+            let root_container_sefs_source = root_container_mount_config.source.as_ref().unwrap();
+            SEFS::open(
+                Box::new(SgxStorage::new(root_container_sefs_source, false, None)),
+                &time::OcclumTimeProvider,
+                &SgxUuidProvider,
+            )
+            .or_else(|_| {
+                SEFS::create(
+                    Box::new(SgxStorage::new(root_container_sefs_source, false, None)),
+                    &time::OcclumTimeProvider,
+                    &SgxUuidProvider,
+                )
+            })?
+        }
+        ConfigMountFsType::TYPE_RAMFS => RamFS::new(),
+        _ => {
+            return_errno!(EINVAL, "Invalid container fs type");
+        }
+    };
+
+    let root_unionfs = UnionFS::new(vec![root_container_fs, root_image_sefs])?;
     let root_mountable_unionfs = MountFS::new(root_unionfs);
     Ok(root_mountable_unionfs)
 }
@@ -112,13 +117,11 @@ fn mount_nonroot_fs_according_to(mount_config: &Vec<ConfigMount>, root: &MNode) 
                 }
                 let source_path = mc.source.as_ref().unwrap();
                 let sefs = if !mc.options.temporary {
-                    {
-                        SEFS::open(
-                            Box::new(SgxStorage::new(source_path, false, None)),
-                            &time::OcclumTimeProvider,
-                            &SgxUuidProvider,
-                        )
-                    }
+                    SEFS::open(
+                        Box::new(SgxStorage::new(source_path, false, None)),
+                        &time::OcclumTimeProvider,
+                        &SgxUuidProvider,
+                    )
                     .or_else(|_| {
                         SEFS::create(
                             Box::new(SgxStorage::new(source_path, false, None)),

@@ -42,7 +42,7 @@
                     },
                     {
                         "target": "/",
-                        "type": "sefs"
+                        "type": "ramfs"
                     }
                 ]
             }
