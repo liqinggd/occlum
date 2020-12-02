@@ -182,7 +182,7 @@ macro_rules! process_syscall_table_with_callback {
             (Umask = 95) => handle_unsupported(),
             (Gettimeofday = 96) => do_gettimeofday(tv_u: *mut timeval_t),
             (Getrlimit = 97) => handle_unsupported(),
-            (Getrusage = 98) => handle_unsupported(),
+            (Getrusage = 98) => do_getrusage(),
             (SysInfo = 99) => do_sysinfo(info: *mut sysinfo_t),
             (Times = 100) => handle_unsupported(),
             (Ptrace = 101) => handle_unsupported(),
@@ -746,6 +746,11 @@ fn do_sysret(user_context: &mut CpuContext) -> ! {
         unsafe { do_exit_task() } // exit enclave
     }
     unreachable!("__occlum_sysret never returns!");
+}
+
+// TODO:: impl real getrusage
+fn do_getrusage() -> Result<isize> {
+    Ok(0)
 }
 
 /*
