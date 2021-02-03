@@ -236,8 +236,21 @@ impl File for LockedFile {
     }
 
     fn set_len(&self, len: usize) -> DevResult<()> {
-        // NOTE: do nothing ??
-        Ok(())
+        convert_result!({
+            let mut file = self.0.lock().unwrap();
+            let file_size = file.seek(SeekFrom::End(0))? as usize;
+            // If file_size < len, pad null bytes.
+            if file_size < len {
+                static ZEROS: [u8; 0x1000] = [0; 0x1000];
+                let mut rest_len = len - file_size;
+                while rest_len != 0 {
+                    let l = rest_len.min(0x1000);
+                    let len_written = file.write(&ZEROS[..l])?;
+                    rest_len -= len_written;
+                }
+            }
+            Ok(())
+        })
     }
 
     fn flush(&self) -> DevResult<()> {
