@@ -1061,11 +1061,71 @@ int test_mprotect_with_invalid_prot() {
     return 0;
 }
 
+int test_multiple_file_backed_mremap() {
+    int prot = PROT_READ | PROT_WRITE;
+    size_t len = PAGE_SIZE;
+    char *file_path = "/tmp/test";
+
+    int fd = open(file_path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        THROW_ERROR("open file error");
+    }
+    ftruncate(fd, 4 * PAGE_SIZE);
+
+    //fallocate(fd, 0, 0, len);
+    void *buf = mmap(0, len, prot, MAP_SHARED, fd, 0);
+    if (buf == MAP_FAILED) {
+        THROW_ERROR("mmap failed");
+    }
+    //fallocate(fd, 0, 0, 2 * len);
+    void *expand_buf = mremap(buf, len, 2 * len, MREMAP_MAYMOVE);
+    if (expand_buf == MAP_FAILED) {
+        THROW_ERROR("mremap with big size failed");
+    }
+    int byte_val = 0xab;
+    int byte_val_2 = 0xcd;
+    for (int i = 0; i < PAGE_SIZE; i++) { ((char *)expand_buf)[i] = byte_val_2; }
+    for (int i = PAGE_SIZE; i < PAGE_SIZE * 2; i++) { ((char *)expand_buf)[i] = byte_val; }
+    int byte_val_3 = 0xef;
+    expand_buf = mremap(expand_buf, len * 2, 4 * len, MREMAP_MAYMOVE);
+    if (expand_buf == MAP_FAILED) {
+        THROW_ERROR("mremap with more big size failed");
+    }
+    for (int i = PAGE_SIZE * 3; i < PAGE_SIZE * 4; i++) { ((char *)expand_buf)[i] = byte_val_3; }
+
+    msync(expand_buf, 4 * len, MS_SYNC);
+    close(fd);
+
+    //fallocate(fd, 0, 0, 4 * len);
+    fd = open(file_path, O_RDONLY);
+    if (fd < 0) {
+        THROW_ERROR("file open failed");
+    }
+    if (check_file_with_repeated_bytes(fd, PAGE_SIZE, byte_val_2) < 0) {
+        THROW_ERROR("unexpected file content");
+    }
+    if (check_file_with_repeated_bytes(fd, PAGE_SIZE, byte_val) < 0) {
+        THROW_ERROR("unexpected file content");
+    }
+
+    if (check_file_with_repeated_bytes(fd, PAGE_SIZE, 0) < 0) {
+        printf("unexpected file content\n");
+    }
+
+    if (check_file_with_repeated_bytes(fd, PAGE_SIZE, byte_val_3) < 0) {
+        THROW_ERROR("unexpected file content");
+    }
+    close(fd);
+
+    return 0;
+}
+
 // ============================================================================
 // Test suite main
 // ============================================================================
 
 static test_case_t test_cases[] = {
+    TEST_CASE(test_multiple_file_backed_mremap),
     TEST_CASE(test_anonymous_mmap),
     TEST_CASE(test_anonymous_mmap_randomly),
     TEST_CASE(test_anonymous_mmap_randomly_with_good_hints),
