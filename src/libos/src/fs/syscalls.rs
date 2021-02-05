@@ -62,6 +62,16 @@ pub fn do_read(fd: FileDesc, buf: *mut u8, size: usize) -> Result<isize> {
     Ok(len as isize)
 }
 
+pub fn do_getrandom(buf_ptr: *mut u8, buf_len: usize, flags: u32) -> Result<isize> {
+    let safe_buf = {
+        from_user::check_mut_array(buf_ptr, buf_len)?;
+        unsafe { std::slice::from_raw_parts_mut(buf_ptr, buf_len) }
+    };
+    use crate::util::random;
+    let len = random::get_random(safe_buf)?;
+    Ok(buf_len as isize)
+}
+
 pub fn do_write(fd: FileDesc, buf: *const u8, size: usize) -> Result<isize> {
     let safe_buf = {
         from_user::check_array(buf, size)?;

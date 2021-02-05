@@ -116,7 +116,7 @@ bitflags! {
 impl From<Metadata> for Stat {
     fn from(info: Metadata) -> Self {
         Stat {
-            dev: info.dev as u64,
+            dev: 2052 as u64,
             ino: info.inode as u64,
             mode: StatMode::from_type_mode(info.type_, info.mode as u16),
             nlink: info.nlinks as u64,
@@ -137,6 +137,7 @@ impl From<Metadata> for Stat {
 pub fn do_fstat(fd: u32) -> Result<Stat> {
     debug!("fstat: fd: {}", fd);
     let file_ref = current!().file(fd as FileDesc)?;
+    info!("metadata: {:?}", file_ref.metadata()?);
     let stat = Stat::from(file_ref.metadata()?);
     Ok(stat)
 }

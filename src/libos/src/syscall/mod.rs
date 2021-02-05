@@ -25,11 +25,11 @@ use crate::fs::{
     do_access, do_chdir, do_chmod, do_chown, do_close, do_dup, do_dup2, do_dup3, do_eventfd,
     do_eventfd2, do_faccessat, do_fallocate, do_fchmod, do_fchmodat, do_fchown, do_fchownat,
     do_fcntl, do_fdatasync, do_fstat, do_fstatat, do_fsync, do_ftruncate, do_getcwd, do_getdents,
-    do_getdents64, do_ioctl, do_lchown, do_link, do_linkat, do_lseek, do_lstat, do_mkdir,
-    do_mkdirat, do_open, do_openat, do_pipe, do_pipe2, do_pread, do_pwrite, do_read, do_readlink,
-    do_readlinkat, do_readv, do_rename, do_renameat, do_rmdir, do_sendfile, do_stat, do_symlink,
-    do_symlinkat, do_sync, do_truncate, do_unlink, do_unlinkat, do_write, do_writev, iovec_t, File,
-    FileDesc, FileRef, HostStdioFds, Stat,
+    do_getdents64, do_getrandom, do_ioctl, do_lchown, do_link, do_linkat, do_lseek, do_lstat,
+    do_mkdir, do_mkdirat, do_open, do_openat, do_pipe, do_pipe2, do_pread, do_pwrite, do_read,
+    do_readlink, do_readlinkat, do_readv, do_rename, do_renameat, do_rmdir, do_sendfile, do_stat,
+    do_symlink, do_symlinkat, do_sync, do_truncate, do_unlink, do_unlinkat, do_write, do_writev,
+    iovec_t, File, FileDesc, FileRef, HostStdioFds, Stat,
 };
 use crate::interrupt::{do_handle_interrupt, sgx_interrupt_info_t};
 use crate::misc::{resource_t, rlimit_t, sysinfo_t, utsname_t};
@@ -402,7 +402,7 @@ macro_rules! process_syscall_table_with_callback {
             (SchedGetattr = 315) => handle_unsupported(),
             (Renameat2 = 316) => handle_unsupported(),
             (Seccomp = 317) => handle_unsupported(),
-            (Getrandom = 318) => handle_unsupported(),
+            (Getrandom = 318) => do_getrandom(buf_ptr: *mut u8, buf_len: usize, flags: u32),
             (MemfdCreate = 319) => handle_unsupported(),
             (KexecFileLoad = 320) => handle_unsupported(),
             (Bpf = 321) => handle_unsupported(),
