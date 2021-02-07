@@ -18,6 +18,10 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName) {
     return 0;
 }
 
+void errorLogCallback(void *pArg, int iErrCode, const char *zMsg){
+    fprintf(stderr, "(%d) %s\n", iErrCode, zMsg);
+}
+
 int main(int argc, char **argv) {
     sqlite3 *db;
     char *db_path, *sql_stmt;
@@ -30,6 +34,7 @@ int main(int argc, char **argv) {
     }
     db_path = argv[1];
     sql_stmt = argv[2];
+    //sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback);
     rc = sqlite3_open(db_path, &db);
     if (rc) {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
