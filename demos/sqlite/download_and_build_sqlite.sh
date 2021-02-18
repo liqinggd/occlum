@@ -1,17 +1,17 @@
 #!/bin/bash
 set -e
 
-SQLITE=sqlite-autoconf-3330000
+SQLITE=sqlite-autoconf-3280000
 SQLITE_SRC=sqlite_src
-DEMO=sqlite_demo
+SQLITE_LIB=libsqlite3.so.0
 
 # Download SQLite source files
 [ ! -d $SQLITE_SRC ] && rm -f $SQLITE.tar.gz && \
-               wget http://www.sqlite.org/2020/$SQLITE.tar.gz \
+               wget http://www.sqlite.org/2019/$SQLITE.tar.gz \
                && rm -rf $SQLITE && tar xf $SQLITE.tar.gz \
                && mv $SQLITE $SQLITE_SRC \
                && rm -f $SQLITE.tar.gz
-[ -e $DEMO ] && rm -f $DEMO
-echo -e "Starting to build $DEMO ..."
-occlum-gcc -O0 -I$SQLITE_SRC sqlite_demo.c $SQLITE_SRC/sqlite3.c -g -lpthread -ldl -o $DEMO
-echo -e "Build $DEMO succeed"
+[ -e $SQLITE_LIB ] && rm -f $SQLITE_LIB
+echo -e "Starting to build $SQLITE_LIB ..."
+occlum-gcc -O2 -fPIC $SQLITE_SRC/sqlite3.c -DSQLITE_MMAP_READWRITE -shared -o $SQLITE_LIB
+echo -e "Build $SQLITE_LIB succeed"

@@ -137,7 +137,6 @@ impl From<Metadata> for Stat {
 pub fn do_fstat(fd: u32) -> Result<Stat> {
     debug!("fstat: fd: {}", fd);
     let file_ref = current!().file(fd as FileDesc)?;
-    info!("metadata: {:?}", file_ref.metadata()?);
     let stat = Stat::from(file_ref.metadata()?);
     Ok(stat)
 }

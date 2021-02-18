@@ -23,6 +23,8 @@ if [ ! -d "image/lib/python3.7" ];then
     cp -f $alpine_fs/usr/local/lib/libpython3.so image/lib
     cp -rf $alpine_fs/usr/local/lib/python3.7 image/lib
     cp -f $alpine_fs/usr/lib/libblas.so.3 image/lib
+    #cp -f $alpine_fs/usr/lib/libsqlite3.so.0 image/lib
+    cp -f /root/occlum/demos/sqlite/libsqlite3.so.0 image/lib
     cp -f $alpine_fs/usr/lib/libcblas.so.3 image/lib
     cp -f $alpine_fs/usr/lib/libbz2.so.1 image/lib
     cp -f $alpine_fs/usr/lib/libffi.so.6 image/lib
@@ -32,15 +34,16 @@ if [ ! -d "image/lib/python3.7" ];then
     cp -f $alpine_fs/usr/lib/liblzma.so.5 image/lib
     cp -f $alpine_fs/usr/lib/libquadmath.so.0 image/lib
     cp -f $alpine_fs/lib/libz.so.1 image/lib
-    cp -rf ../dataset image
-    cp -f ../demo.py image
-    new_json="$(jq '.resource_limits.user_space_size = "320MB" |
+    cp -f /root/test.py image
+    cp -f /root/data.db image
+    new_json="$(jq '.resource_limits.user_space_size = "1320MB" |
                     .resource_limits.kernel_space_heap_size = "256MB" |
-                    .process.default_mmap_size = "256MB"' Occlum.json)" && \
+                    .env.default = [ "SQLITE_TMPDIR=/tmp" ] |
+                    .process.default_mmap_size = "1000MB"' Occlum.json)" && \
     echo "${new_json}" > Occlum.json
     occlum build
 fi
 
 # 3. Run the hello world sample
-echo -e "${BLUE}occlum run /bin/python3.7 demo.py${NC}"
-occlum run /bin/python3.7 demo.py
+echo -e "${BLUE}occlum run /bin/python3.7 test.py${NC}"
+occlum run /bin/python3.7 test.py
