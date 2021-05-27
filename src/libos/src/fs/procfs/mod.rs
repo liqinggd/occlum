@@ -9,12 +9,14 @@ use self::meminfo_inode::MemInfoINode;
 use self::pid_inode::LockedPidDirINode;
 use self::proc_inode::{Dir, DirProcINode, File, ProcINode, SymLink};
 use self::self_inode::SelfSymINode;
+use self::stat_inode::StatINode;
 
 mod cpuinfo_inode;
 mod meminfo_inode;
 mod pid_inode;
 mod proc_inode;
 mod self_inode;
+mod stat_inode;
 
 /// Proc file system
 pub struct ProcFS {
@@ -102,6 +104,9 @@ impl LockedProcRootINode {
         let self_inode = SelfSymINode::new();
         file.non_volatile_entries
             .insert(String::from("self"), self_inode);
+        let stat_inode = StatINode::new();
+        file.non_volatile_entries
+            .insert(String::from("stat"), stat_inode);
     }
 }
 
