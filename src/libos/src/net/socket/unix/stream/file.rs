@@ -63,6 +63,10 @@ impl File for Stream {
                 }
                 _ => return_errno!(ENOTCONN, "unconnected socket"),
             },
+            IoctlCmd::FIONBIO(nonblocking) => {
+                self.set_nonblocking(**nonblocking != 0);
+                Ok(0)
+            }
             _ => return_errno!(EINVAL, "unknown ioctl cmd for unix socket"),
         }
     }
