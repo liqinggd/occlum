@@ -1,6 +1,6 @@
 use super::*;
 use crate::process::table::get_process;
-use crate::process::ProcessRef;
+use crate::process::{ProcessRef, ProcessStatus};
 
 pub struct LockedPidDirINode(RwLock<PidDirINode>);
 
@@ -41,6 +41,9 @@ impl LockedPidDirINode {
         // root
         let root_inode = ProcRootSymINode::new(&file.process_ref);
         file.entries.insert(String::from("root"), root_inode);
+        // stat
+        let stat_inode = ProcStatINode::new(&file.process_ref);
+        file.entries.insert(String::from("stat"), stat_inode);
 
         Ok(())
     }
@@ -137,6 +140,30 @@ impl ProcCmdlineINode {
 impl ProcINode for ProcCmdlineINode {
     fn generate_data_in_bytes(&self) -> vfs::Result<Vec<u8>> {
         Ok(self.0.exec_path().to_owned().into_bytes())
+    }
+}
+
+pub struct ProcStatINode(ProcessRef);
+
+impl ProcStatINode {
+    pub fn new(process_ref: &ProcessRef) -> Arc<dyn INode> {
+        Arc::new(File::new(Self(Arc::clone(process_ref))))
+    }
+}
+
+impl ProcINode for ProcStatINode {
+    fn generate_data_in_bytes(&self) -> vfs::Result<Vec<u8>> {
+        let pid = self.0.pid();
+        let comm = split_path(self.0.exec_path()).1;
+        let state = match self.0.status() {
+            ProcessStatus::Running => "R",
+            ProcessStatus::Stopped => "T",
+            ProcessStatus::Zombie => "Z",
+        };
+        let ppid = self.0.parent().pid();
+        let pgid = self.0.pgid();
+        let num_threads = self.0.threads().len();
+        Ok(format!("{} ({}) {} {} {} {} 0 {} 0 0 0 0 0 0 0 0 0 0 0 {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n", pid, comm, state, ppid, pgid, pgid, pgid, num_threads).into_bytes())
     }
 }
 
