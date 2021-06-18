@@ -112,6 +112,11 @@ impl File for INodeFile {
         Ok(*offset as i64)
     }
 
+    fn position(&self) -> Result<off_t> {
+        let offset = self.offset.lock().unwrap();
+        Ok(*offset as off_t)
+    }
+
     fn metadata(&self) -> Result<Metadata> {
         let metadata = self.inode.metadata()?;
         Ok(metadata)
@@ -182,30 +187,50 @@ impl File for INodeFile {
         Ok(())
     }
 
-    fn test_advisory_lock(&self, lock: &mut Flock) -> Result<()> {
-        // Let the advisory lock could be placed
-        // TODO: Implement the real advisory lock
-        lock.l_type = FlockType::F_UNLCK;
+    fn test_advisory_lock(&self, lock: &mut RangeLock) -> Result<()> {
+        match self.inode.ext()?.get::<RangeLockList>() {
+            None => {
+                // The advisory lock could be placed if there is no lock list
+                lock.set_type(RangeLockType::F_UNLCK);
+            }
+            Some(range_lock_list) => {
+                range_lock_list.test_lock(lock)?;
+            }
+        }
         Ok(())
     }
 
-    fn set_advisory_lock(&self, lock: &Flock) -> Result<()> {
-        match lock.l_type {
-            FlockType::F_RDLCK => {
-                if !self.access_mode.readable() {
-                    return_errno!(EACCES, "File not readable");
+    fn set_advisory_lock(&self, lock: &RangeLock, is_nonblocking: bool) -> Result<()> {
+        self.check_advisory_lock_with_access_mode(lock)?;
+
+        let range_lock_list = match self.inode.ext()?.get::<RangeLockList>() {
+            Some(list) => list,
+            None => {
+                if RangeLockType::F_UNLCK == lock.type_() {
+                    return Ok(());
                 }
+                let new_empty_list = Arc::new(RangeLockList::new());
+                self.inode
+                    .ext()?
+                    .get_or_put::<RangeLockList>(new_empty_list)
             }
-            FlockType::F_WRLCK => {
-                if !self.access_mode.writable() {
-                    return_errno!(EACCES, "File not writable");
-                }
-            }
-            _ => (),
+        };
+
+        if RangeLockType::F_UNLCK == lock.type_() {
+            range_lock_list.unlock(lock)?;
+        } else {
+            range_lock_list.set_lock(lock, is_nonblocking)?;
         }
-        // Let the advisory lock could be acquired or released
-        // TODO: Implement the real advisory lock
         Ok(())
+    }
+
+    fn release_advisory_locks(&self) -> Result<()> {
+        let range_lock = RangeLockBuilder::new()
+            .type_(RangeLockType::F_UNLCK)
+            .range(FileRange::new(0, OFFSET_MAX)?)
+            .build()?;
+
+        self.set_advisory_lock(&range_lock, true)
     }
 
     fn ioctl(&self, cmd: &mut IoctlCmd) -> Result<i32> {
@@ -268,6 +293,23 @@ impl INodeFile {
 
     pub fn abs_path(&self) -> &str {
         &self.abs_path
+    }
+
+    fn check_advisory_lock_with_access_mode(&self, lock: &RangeLock) -> Result<()> {
+        match lock.type_() {
+            RangeLockType::F_RDLCK => {
+                if !self.access_mode.readable() {
+                    return_errno!(EBADF, "File not readable");
+                }
+            }
+            RangeLockType::F_WRLCK => {
+                if !self.access_mode.writable() {
+                    return_errno!(EBADF, "File not writable");
+                }
+            }
+            _ => (),
+        }
+        Ok(())
     }
 }
 
