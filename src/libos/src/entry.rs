@@ -56,12 +56,13 @@ pub extern "C" fn occlum_ecall_init(
             }
             Ok(log_level) => log_level,
         };
+        input_log_level
         // Use the input log level if and only if the enclave allows debug
-        if sgx_allow_debug() {
+        /*if sgx_allow_debug() {
             input_log_level
         } else {
             LevelFilter::Off
-        }
+        }*/
     };
 
     INIT_ONCE.call_once(|| {
